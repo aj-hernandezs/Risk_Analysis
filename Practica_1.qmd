@@ -1,0 +1,210 @@
+---
+title: "Práctica 1: Hechos estilizados sobre el comportamiento del precio y el rendimiento de los activos"
+author: "Alan Jesús Hernández Soto"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    code-fold: true
+    code-summary: "Mostrar código"
+    theme: cosmo
+    fig-width: 8
+    fig-height: 5
+    embed-resources: true
+editor: visual
+---
+
+# 1. Introducción
+
+Se seleccionara 3 activos que coticen en una bolsa distinta a la BMV calculando su rendimineto como base para analizar si se cumplen los 4 hechos estilizados los cuales son dependencia lineal debil, agrupamiento de volatilidad, colas pesadas y asímetria. Apartir de esto con asistencia de IA se retroalimentara y buscara modificar el analisis realizado para buscar una conclusión concisa.
+
+Los activos a utilizar son: - NVDA: NVIDIA Corporation - AMD: Advanced Micro Devices, Inc. - AVGO: Broadcom Inc.
+
+Se utiliza esta selección ya que pertenecen a la Industria de Semiconductores para Inteligencia Artificial que esta en auge esta última decada lo cual puede brindar un analisis interesante sobre 3 pilares del mercado.
+
+# 2. Análisis de los hechos estilizados
+
+## Obtención de Precios
+
+```{r}
+library(quantmod)
+library(moments)
+ticker <- c('NVDA', 'AVGO', 'AMD')
+
+getSymbols(
+  ticker,
+  src='yahoo',
+  from='2022-01-01'
+)
+
+price <- do.call(merge, lapply(ticker, function(t) Ad(get(t))))
+colnames(price) <- ticker
+
+head(price)
+```
+
+## Gráfico de Precios
+
+```{r}
+plot(price, main = "Precios ajustados: NVDA, AVGO, AMD",
+     legend.loc = "topleft")
+```
+
+```{r}
+class(price)
+```
+
+## Obtención de Rendimiento
+
+```{r}
+simple_return <- na.omit(do.call(merge, lapply(price, function(x) dailyReturn(x, type = "arithmetic"))))
+log_return    <- na.omit(do.call(merge, lapply(price, function(x) dailyReturn(x, type = "log"))))
+
+colnames(simple_return) <- ticker
+colnames(log_return)    <- ticker
+
+head(cbind(simple_return, log_return))
+```
+
+## Gráfico de Rendimientos Logaritmico
+
+```{r}
+plot(log_return, main = "Rendimiento logarítmico: NVDA, AVGO, AMD",
+     legend.loc = "topleft")
+```
+
+## Hecho I: Dependencia Lineal de los Rendimientos
+
+Se determina si los rendimientos de un activo presentan correlación lineal significativa con sus propios valores pasados, si los mercados son eficientes, toda la información pasada sobre precios ya está reflejada en el precio actual, y por lo tanto no debería existir dependencia lineal significativa entre rendimientos pasados y futuros.
+
+```{r}
+acf(na.omit(log_return$NVDA), main = "ACF - NVDA")
+acf(na.omit(log_return$AVGO), main = "ACF - AVGO")
+acf(na.omit(log_return$AMD),  main = "ACF - AMD")
+par(mfrow = c(1, 1))
+```
+
+Para todos los rezagos las barras de autocorrelación están dentro de las bandas azules punteadas a excepción del 0 que es el presente por lo tanto es trivial, esto indica que NO hay autocorrelación en ninguna de las gráficas mas no significa que hay independencia o autocorrelación 0.
+
+## Hecho II: Cluster de Volatilidad
+
+La magnitud de los rendimientos sí tiene memoria: si el mercado tuvo un día muy volátil, es más probable que el día siguiente también lo sea, sin importar si el movimiento fue positivo o negativo. Esto nos muestra que los rendimientos no son independientes.
+
+```{r}
+acf(as.numeric(na.omit(log_return$NVDA))^2, main = "ACF - NVDA al cuadrado")
+acf(as.numeric(na.omit(log_return$AVGO))^2, main = "ACF - AVGO al cuadrado")
+acf(as.numeric(na.omit(log_return$AMD))^2,  main = "ACF - AMD al cuadrado")
+```
+
+Tomando en cuenta la gráfica de AVGO, ya que NVDA tiene evidencia de clustering de volatilidad débil y no muy concluyente, sí hay evidencia más clara de clustering de volatilidad, particularmente en el corto plazo.
+
+## Hecho III: Colas Pesadas
+
+la distribución de los rendimientos financieros no es normal ya que tiene colas más pesadas que la distribución normal: eventos extremos (grandes ganancias o pérdidas) ocurren con mayor frecuencia y mayor curtosis, contradiciendo el supuesto clásico de que los rendimientos siguen una distribución normal.
+
+```{r}
+par(mfrow = c(1, 1))
+
+for (t in ticker) {
+  
+  r <- as.numeric(na.omit(log_return[, t]))
+  
+  hist(
+    r,
+    breaks = 50,
+    probability = TRUE,
+    main = paste(t, "- Distribution of Log Returns"),
+    xlab = "Log Return"
+  )
+  
+  lines(
+    density(r),
+    lwd = 2
+  )
+  
+  mu_hat    <- mean(r)
+  sigma_hat <- sd(r)
+  
+  curve(
+    dnorm(x, mean = mu_hat, sd = sigma_hat),
+    add = TRUE,
+    lwd = 2,
+    lty = 2
+  )
+  
+  legend(
+    "topright",
+    legend = c("Empirical density", "Normal benchmark"),
+    lty = c(1, 2),
+    lwd = c(2, 2),
+    bty = "n"
+  )
+  
+}
+
+par(mfrow = c(1, 1))
+```
+
+Las 3 gráficas de los Activos muestran comportamiento de este tipo teniendo colas pesadas y mayor curtosis.
+
+## Hecho IV: Asimetría
+
+Este hecho estilizado se refiere a que la distribución de los rendimientos financieros generalmente no es simétrica alrededor de su media, a diferencia de la distribución normal (que por definición tiene asimetría = 0).
+
+```{r}
+summary_list <- list()
+
+for (t in ticker) {
+  
+  r <- as.numeric(na.omit(log_return[, t]))
+  
+  mean_return <- mean(r)
+  sd_return   <- sd(r)
+  skew_return <- skewness(r)
+  kurt_return <- kurtosis(r)
+  
+  excess_kurtosis <- kurt_return - 3
+  
+  summary_list[[t]] <- data.frame(
+    Ticker         = t,
+    Mean           = mean_return,
+    SD             = sd_return,
+    Skewness       = skew_return,
+    Kurtosis       = kurt_return,
+    Excess_Kurtosis = excess_kurtosis
+  )
+}
+
+summary_stats <- do.call(rbind, summary_list)
+rownames(summary_stats) <- NULL
+
+summary_stats
+```
+
+Las 3 acciones muestran asimetría positiva, no negativa como es lo típico en índices bursátiles amplios, todas tienen exceso de curtosis muy por encima de 0 (Esto confirma colas mucho más pesadas que la normal en las 3) y tienen una medio de casi 0. Esto quiere decir que las 3 acciones se alejan claramente del supuesto de normalidad lo que es normal en estos instrumentos financieros.
+
+# 3. Auditoria con IA
+
+## Respuesta de IA
+
+-   Se construyó correctamente la obtención de precios y rendimientos (simple/log) de NVDA, AVGO y AMD con quantmod, corrigiendo errores de sintaxis e iteración sobre múltiples tickers.
+-   Hecho I (dependencia lineal): solo se revisó NVDA (sin autocorrelación significativa), pero la conclusión se generalizó a los 3 activos sin verificar AVGO ni AMD.
+-   Hecho II (cluster de volatilidad): NVDA mostró evidencia débil, AVGO evidencia clara — pero AMD nunca se graficó ni revisó, y aun así se concluyó "sí hay clustering" basándose solo en el caso favorable (cherry-picking).
+-   Hecho III (colas pesadas): confirmado numéricamente para los 3 activos vía exceso de curtosis (3.6–7.3)t.
+-   Hecho IV (asimetría): los 3 activos mostraron asimetría positiva, contrario al patrón típico (negativo) de renta variable — hallazgo interesante pero mal explicado en el documento.
+-   La explicación real de esa asimetría positiva (rally de IA 2023-2024) se discutiót pero no se incluyó en el .qmd final.
+-   Todo el análisis es puramente visual/cualitativo — nunca se aplicaron pruebas formales (Ljung-Box, Jarque-Bera) que respalden estadísticamente las conclusiones.
+-   Existen inconsistencias menores de código (uso de as.numeric() en unos bloques sí y en otros no).
+-   Falta discutir limitaciones de la muestra (periodo corto, dominado por un evento idiosincrático de IA).
+
+Conclusión general: el marco conceptual está bien entendido, pero el documento necesita (a) completar las gráficas faltantes por activo, (b) agregar pruebas estadísticas formales, y (c) reescribir conclusiones para reflejar evidencia real y no solo el caso más favorable.
+
+## Justificación
+
+La IA no toma en cuenta las 3 gráficas generadas así mismo indica agregar pruebas estadísticas formales lo cual no estaría mal ya que soltar conclusiones solo viendo gráficas y tablas es muy generalizado aunque parezca que es la verdad, así mismo tiene razón que actualmente estas empresas estan siendo muy favorecidas.
+
+# 4. Conclusiones
+
+Se podría concluir que los tres activos NVDA, AVGO y AMD comparten tres de los cuatro hechos estilizados de forma clara: en Hecho I ninguno muestra autocorrelación significativa en sus rendimientos, consistente con eficiencia de mercado en forma débil, en Hecho III los tres presentan exceso de curtosis muy por encima de cero (AVGO: 7.31, NVDA: 3.87, AMD: 3.60), confirmando que la distribución normal subestima la probabilidad de movimientos extremos en los tres casos y en Hecho IV, mostrando asimetría positiva en vez de la negativa típica de renta variable mas mostrando una asimetría. Donde difieren es en el Hecho II: AVGO tiene el patrón más claro y persistente. Aun así la evidencia de clustering de volatilidad sugiere que la volatilidad no es constante en el tiempoPara la medición de riesgo, estas conclusiones implican que modelos que asumen normalidad subestimarían sistemáticamente el riesgo de cola en los tres activos.
