@@ -1,0 +1,273 @@
+---
+title: "Proyecto Final: Parte 2"
+author: "Alan Jesús Hernández Soto (752714), Jeronimo Rojas Alvarado (731609), Francisco Josué Ramírez Avila (747819), JP Mendez"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+lang: es
+---
+
+# Proyecto Final: Parte 2
+
+## Introducción
+
+En la primera entrega se estudió a Banco del Bajío (BanBajío) mediante sus estados financieros, su modelo de negocio y sus principales riesgos. En esta segunda parte se analiza la misma empresa desde la perspectiva del mercado: la evolución de su acción **BBAJIOO** en la Bolsa Mexicana de Valores (BMV). El propósito es observar cómo las expectativas de los inversionistas cambian frente a nueva información económica, política y empresarial.
+
+El análisis cubre desde la salida a bolsa de BanBajío en junio de 2017 hasta el 30 de junio de 2026. Primero se presentan el precio, los rendimientos diarios y el máximo *drawdown*; después se relacionan los movimientos importantes con eventos concretos. Finalmente, se compara el rendimiento anual de la acción con el crecimiento del PIB de México y se estudia el último año de la muestra. Con ello se busca mostrar que el riesgo financiero no depende solamente de los resultados del banco: también depende de choques externos e información que no puede anticiparse ni controlarse por completo.
+
+## Exploración de la serie histórica
+
+### Gráfica de precios y rendimientos
+
+```{r configuracion, message=FALSE, warning=FALSE}
+
+library(quantmod)
+
+precios <- getSymbols(
+  "BBAJIOO.MX",
+  src = "yahoo",
+  to = as.Date("2026-06-30"),
+  auto.assign = FALSE
+)
+
+precios_cierre <- Cl(precios)
+```
+
+```{r grafica-precios, fig.width=12, fig.height=6}
+plot(
+  precios_cierre,
+  main = "Precio de Cierre de Banco del Bajío",
+  xlab = "Fecha",
+  ylab = "Precio",
+  col = "#1f77b4"
+)
+```
+
+```{r grafica-rendimientos, fig.width=12, fig.height=6}
+rendimientos <- na.omit(dailyReturn(precios_cierre, type = "arithmetic"))
+plot(
+  rendimientos,
+  main = "Rendimiento de Banco del Bajío",
+  xlab = "Fecha",
+  ylab = "Rendimiento",
+  col = "#1f77b4"
+)
+```
+
+### Identificación de movimientos relevantes
+
+```{r periodos, fig.width=12, fig.height=18}
+periodo_1 <- precios_cierre["2017-01-01/2018-10-31"]
+periodo_2 <- precios_cierre["2020-02-01/2020-04-30"]
+periodo_3 <- precios_cierre["2022-06-01/2023-02-28"]
+periodo_4 <- precios_cierre["2024-04-01/2024-12-31"]
+periodo_5 <- precios_cierre["2025-07-01/2026-06-30"]
+op <- par(mfrow = c(5, 1), mar = c(3, 4, 3, 1))
+plot(periodo_1, main = "Periodo 1: 2017-01-01 a 2018-10-31",
+     xlab = "Fecha", ylab = "Precio de Cierre", col = "#1f77b4")
+plot(periodo_2, main = "Periodo 2: 2020-02-01 a 2020-04-30",
+     xlab = "Fecha", ylab = "Precio de Cierre", col = "#1f77b4")
+plot(periodo_3, main = "Periodo 3: 2022-06-01 a 2023-02-28",
+     xlab = "Fecha", ylab = "Precio de Cierre", col = "#1f77b4")
+plot(periodo_4, main = "Periodo 4: 2024-04-01 a 2024-12-31",
+     xlab = "Fecha", ylab = "Precio de Cierre", col = "#1f77b4")
+plot(periodo_5, main = "Periodo 5: 2025-07-01 a 2026-06-30",
+     xlab = "Fecha", ylab = "Precio de Cierre", col = "#1f77b4")
+par(op)
+```
+
+-   **Periodo 1: 1 de enero de 2017 – 31 de octubre de 2018:** Se observa una tendencia alcista gradual. El precio pasa de niveles cercanos a 16 hacia aproximadamente 24–25, aunque presenta fluctuaciones intermedias. Es una etapa de apreciación sostenida del activo.
+-   **Periodo 2: 1 de febrero de 2020 – 30 de abril de 2020:** Se presenta una caída muy pronunciada y rápida. El precio baja desde alrededor de 17 hasta niveles próximos a 10, acompañado por una volatilidad diaria elevada. Es uno de los movimientos bajistas más abruptos de toda la serie, coincidiendo con el COVID-19.
+-   **Periodo 3: 1 de junio de 2022 – 28 de febrero de 2023:** Tras una corrección inicial hacia niveles cercanos a 25, el activo inicia un fuerte repunte. El precio asciende hasta aproximadamente 52–53 al cierre del periodo, por lo que representa una fase de recuperación y crecimiento acelerado.
+-   **Periodo 4: 1 de abril de 2024 – 31 de diciembre de 2024:** Predomina una tendencia bajista. Desde valores cercanos a 50, el precio desciende gradualmente hasta aproximadamente 35–36, con variaciones relevantes durante el trayecto. El periodo refleja una corrección importante posterior a los máximos de inicios de 2024.
+-   **Periodo 5: 1 de julio de 2025 – 30 de junio de 2026:** El activo muestra una recuperación sólida y volátil. Parte de niveles cercanos a 36–40 y avanza hacia máximos alrededor de 55–56. Es un periodo de fuerte apreciación que lleva el precio a sus niveles más altos del histórico mostrado.
+
+### Máximo drawdown
+
+El máximo *drawdown* mide la mayor pérdida porcentual desde un máximo histórico hasta el mínimo posterior, antes de que el precio recupere ese máximo.
+
+```{r maximo-drawdown, fig.width=12, fig.height=5}
+
+serie_precios <- na.omit(precios_cierre)
+maximo_acumulado <- cummax(serie_precios)
+drawdown <- serie_precios / maximo_acumulado - 1
+max_drawdown <- min(drawdown)
+fecha_valle <- index(drawdown)[which.min(as.numeric(drawdown))]
+
+precios_hasta_valle <- serie_precios[paste0("/", fecha_valle)]
+fecha_pico <- index(precios_hasta_valle)[which.max(as.numeric(precios_hasta_valle))]
+precio_pico <- as.numeric(serie_precios[fecha_pico])
+precio_valle <- as.numeric(serie_precios[fecha_valle])
+cat(sprintf("Máximo drawdown: %.2f%%\n", 100 * max_drawdown))
+cat(sprintf("Pico previo: %s ($%.2f)\n", fecha_pico, precio_pico))
+cat(sprintf("Valle: %s ($%.2f)\n", fecha_valle, precio_valle))
+plot(
+  drawdown,
+  main = "Drawdown histórico de Banco del Bajío",
+  xlab = "Fecha",
+  ylab = "Drawdown",
+  col = "firebrick"
+)
+abline(h = max_drawdown, col = "black", lty = 2)
+points(fecha_valle, max_drawdown, col = "black", pch = 19)
+legend(
+  "bottomleft",
+  legend = sprintf("Máximo drawdown: %.2f%%", 100 * max_drawdown),
+  lty = 2,
+  col = "black",
+  bty = "n"
+)
+grid()
+```
+
+## Identificación de eventos y explicación de cambios.
+
+### Periodo 1: 1 de enero de 2017 a 31 de octubre de 2018 — tendencia alcista
+
+BanBajío realizó su oferta pública en junio de 2017. Durante 2017 y 2018, Banxico elevó su tasa objetivo, lo que podía favorecer los ingresos financieros del banco si el rendimiento de sus créditos aumentaba más rápido que el costo de sus depósitos. Como evidencia posterior, la cartera vigente de BanBajío creció 16.3% en 2018 y su margen de interés se benefició de aumentos en la TIIE. Esto ayuda a contextualizar la tendencia alcista: el mercado podía esperar mayor rentabilidad y crecimiento.
+
+### Periodo 2: 1 de febrero de 2020 a 30 de abril de 2020 — caída abrupta
+
+La caída coincide con el inicio de la pandemia de COVID-19 y las restricciones a la actividad económica. La incertidumbre sobre ventas, empleo y capacidad de pago de empresas elevó el riesgo de crédito para los bancos. Banxico recortó su tasa objetivo en marzo y abril de 2020 para apoyar a la economía. Sin embargo, el mercado también podía anticipar menores márgenes financieros y mayores reservas por incumplimientos. Posteriormente, BanBajío reportó que las reservas preventivas afectaron sus resultados del segundo trimestre.
+
+### Periodo 3: 1 de junio de 2022 a 28 de febrero de 2023 — recuperación con volatilidad
+
+La inflación elevada y el conflicto entre Rusia y Ucrania llevaron a Banxico a aumentar la tasa objetivo hasta 11.00% en febrero de 2023. Las tasas altas podían mejorar los ingresos por intereses, pero también elevar el riesgo de morosidad. BanBajío cerró 2022 con una utilidad neta auditada de \$8,072 millones. Esta rentabilidad pudo fortalecer las expectativas de los inversionistas y es consistente con la recuperación del precio.
+
+### Periodo 4: 1 de abril de 2024 a 31 de diciembre de 2024 — corrección bajista
+
+Después de las elecciones de junio de 2024, aumentó la volatilidad en los mercados mexicanos por la incertidumbre relacionada con la reforma judicial. Para un banco, la certeza jurídica importa porque afecta la ejecución de contratos, garantías y recuperaciones de crédito. Además, un entorno de menores tasas redujo la expectativa de margen financiero. BanBajío reportó posteriormente una contracción de su margen de interés neto en el cuarto trimestre de 2024. Aunque la cartera total creció 10.9%, el precio pudo disminuir por una menor expectativa de utilidades futuras.
+
+### Periodo 5: 1 de julio de 2025 a 30 de junio de 2026 — recuperación y nuevos máximos
+
+En septiembre de 2025, BanBajío anunció un dividendo de \$2.2456 por acción. Este pago es relevante porque representa efectivo para los accionistas y puede mejorar la valoración esperada de la acción. Al mismo tiempo, los resultados de 4T25 y 1T26 mostraron presión sobre utilidades y margen financiero debido a menores tasas de referencia. También hubo un cambio de director general en mayo de 2026 y persistió la incertidumbre comercial por los aranceles de Estados Unidos. A pesar de esos riesgos, el precio se recuperó. Esto muestra que los inversionistas valoran expectativas futuras, continuidad operativa y dividendos, además de los resultados trimestrales.
+
+## Relación con el entorno económico
+
+Para realizar la comparación se usa el rendimiento de precio anual de BBAJIOO y la variación anual real del PIB de México. El primer año se calcula desde el primer cierre disponible de 2017, pues la acción empezó a cotizar en junio; de 2018 en adelante, el rendimiento se calcula contra el cierre del año anterior. No se incorporan dividendos, por lo que se trata de rendimiento por variación de precio y no de rendimiento total. Para evitar mezclar un año incompleto, la gráfica termina en 2025.
+
+```{r pib-rendimiento, fig.width=12, fig.height=6}
+# Cierres de la acción al final de cada año y rendimientos anuales de precio
+cierre_anual <- apply.yearly(precios_cierre, last)
+rendimiento_anual <- 100 * ROC(cierre_anual, type = "discrete")
+
+precio_inicio_2017 <- as.numeric(first(na.omit(precios_cierre["2017"])))
+rendimiento_anual[1] <- 100 * (as.numeric(cierre_anual[1]) / precio_inicio_2017 - 1)
+
+datos_rendimiento <- data.frame(
+  Anio = as.integer(format(index(cierre_anual), "%Y")),
+  Rendimiento_BBAJIO = as.numeric(rendimiento_anual)
+)
+
+# Tasa PIB. Fuente: INEGI, Sistema de Cuentas Nacionales.
+pib_mexico <- data.frame(
+  Anio = 2017:2025,
+  Crecimiento_PIB = c(2.1, 2.1, -0.3, -8.2, 6.1, 3.9, 3.2, 1.2, 0.6)
+)
+
+comparacion_pib <- merge(datos_rendimiento, pib_mexico, by = "Anio")
+correlacion_pib <- cor(
+  comparacion_pib$Rendimiento_BBAJIO,
+  comparacion_pib$Crecimiento_PIB,
+  use = "complete.obs"
+)
+
+matriz_grafica <- rbind(
+  comparacion_pib$Rendimiento_BBAJIO,
+  comparacion_pib$Crecimiento_PIB
+)
+barplot(
+  matriz_grafica,
+  beside = TRUE,
+  names.arg = comparacion_pib$Anio,
+  col = c("#1f77b4", "#2a9d8f"),
+  ylab = "Variación anual (%)",
+  xlab = "Año",
+  main = "Rendimiento anual de BBAJIOO y crecimiento del PIB de México"
+)
+abline(h = 0, lty = 1, col = "gray40")
+legend(
+  "topright",
+  legend = c("Rendimiento anual BBAJIOO", "Crecimiento real del PIB"),
+  fill = c("#1f77b4", "#2a9d8f"),
+  bty = "n"
+)
+
+knitr::kable(
+  comparacion_pib,
+  digits = 2,
+  col.names = c("Año", "Rendimiento BBAJIOO (%)", "PIB real (%)"),
+  caption = "Comparación anual usada en la gráfica"
+)
+cat(sprintf("Correlación PIB-rendimiento anual: %.2f", correlacion_pib))
+```
+
+La correlación calculada para 2017--2025 es de `r round(correlacion_pib, 2)`. Su signo permite identificar si las dos series tendieron a moverse en el mismo sentido, pero no prueba que el PIB cause el rendimiento de la acción. Además, la muestra contiene pocos años, por lo que debe interpretarse como evidencia descriptiva.
+
+La gráfica sugiere una relación positiva, pero incompleta. En 2020, la caída de la actividad económica y el deterioro de las expectativas de pago coincidieron con la caída de la acción. En la recuperación posterior, el crecimiento del PIB también coincidió con una mejora del precio. Sin embargo, BBAJIOO no se comporta como un reflejo exacto del ciclo económico.
+
+Las diferencias son importantes para interpretar el riesgo. En 2019, la debilidad de la economía no impedía que las decisiones de la empresa, como una recompra de acciones, influyeran en la valoración. En 2022, el rendimiento de un banco también estuvo asociado al ciclo de tasas: Banxico elevó de manera importante la tasa de referencia para combatir la inflación, lo que podía aumentar el margen financiero. En 2023 y 2024, el precio respondió además a expectativas sobre la duración de las tasas altas y a incertidumbre política-regulatoria. Por ello, el PIB es un indicador útil del entorno general, pero para explicar la acción también se deben vigilar las tasas de interés, la calidad de la cartera, las decisiones corporativas y el riesgo político (Banco de México [Banxico], 2026; Instituto Nacional de Estadística y Geografía [INEGI], 2026).
+
+## Análisis de los periodos más recientes
+
+El siguiente gráfico se concentra en el último año completo de la muestra: del 1 de julio de 2025 al 30 de junio de 2026. Se reporta el rendimiento acumulado de precio y una volatilidad anualizada aproximada, calculada a partir de rendimientos diarios. Esta medida ayuda a distinguir una recuperación sostenida de una trayectoria sin riesgo: aun con un rendimiento positivo, pueden existir oscilaciones diarias relevantes.
+
+```{r periodo-reciente, fig.width=12, fig.height=6}
+periodo_reciente <- na.omit(precios_cierre["2025-07-01/2026-06-30"])
+rendimientos_recientes <- na.omit(dailyReturn(periodo_reciente, type = "arithmetic"))
+rendimiento_reciente <- 100 * (
+  as.numeric(last(periodo_reciente)) / as.numeric(first(periodo_reciente)) - 1
+)
+volatilidad_reciente <- 100 * sd(as.numeric(rendimientos_recientes)) * sqrt(252)
+
+plot(
+  periodo_reciente,
+  main = "BBAJIOO: último año de la muestra",
+  xlab = "Fecha",
+  ylab = "Precio de cierre",
+  col = "#1f77b4"
+)
+grid()
+cat(sprintf("Rendimiento acumulado: %.2f%%\n", rendimiento_reciente))
+cat(sprintf("Volatilidad anualizada aproximada: %.2f%%", volatilidad_reciente))
+```
+
+Entre julio de 2025 y junio de 2026, el precio acumuló un rendimiento de 24% y la volatilidad anualizada aproximada fue de 30.16%. Estas cifras describen el comportamiento observado; no permiten atribuir todo el movimiento a un solo evento ni pronostican el desempeño posterior.
+
+Tres fuentes de información fueron especialmente relevantes durante este periodo:
+
+-   **Normalización de las tasas de interés.** Banxico continuó reduciendo la tasa objetivo durante 2025 y, en marzo y mayo de 2026, realizó recortes adicionales de 25 puntos base; el 25 de junio la mantuvo en 6.50%. Para un banco, tasas más bajas pueden reducir el rendimiento de los activos que generan intereses antes de que el costo de fondeo se ajuste por completo. Por lo tanto, la expectativa de un menor margen financiero pudo limitar el efecto positivo de una recuperación del crédito (Banxico, 2026).
+
+-   **Resultados financieros.** Al cierre del 4T25, BanBajío reportó una utilidad neta de \$2,155 millones, 15.1% menor que un año antes, y un margen de interés neto de 5.8%, 100 puntos base menor. En el 1T26, la utilidad neta fue de \$2,042 millones; aunque el ROE anualizado se ubicó en 16.72%, la cartera total creció 6.9% anual. La combinación de menor margen y crecimiento de la cartera muestra que el mercado recibe señales mixtas: hay expansión del negocio, pero también presión sobre la rentabilidad de corto plazo (Bolsa Mexicana de Valores [BMV], 2026a; BMV, 2026b).
+
+-   **Transición de la dirección general.** El 22 de abril de 2026, BanBajío informó que Edgardo del Rincón Gutiérrez dejaría la dirección general a partir del 1 de mayo y que Iván Lomelí León asumiría el puesto. El cambio es relevante porque puede modificar las expectativas sobre estrategia, gobierno corporativo y continuidad operativa. No obstante, el nombramiento de un directivo interno y la comunicación previa del banco reducen parte de la incertidumbre. El evento debe leerse como un riesgo de información nueva, no como una prueba automática de deterioro financiero (BMV, 2026c).
+
+En conjunto, el último año muestra que el mercado no reacciona solamente a una cifra trimestral. La trayectoria de la acción incorpora simultáneamente la expectativa de menores tasas, el crecimiento de la cartera, la evolución de utilidades y noticias de gobierno corporativo. También permaneció la incertidumbre sobre el entorno comercial de México y Estados Unidos, que puede afectar la actividad de las empresas que son clientes del banco. Por ello, una reacción moderada o incluso positiva del precio no significa que los riesgos hayan desaparecido: puede significar que el mercado los considera manejables, que ya los había anticipado o que espera mejores resultados futuros.
+
+## Conclusión
+
+El análisis de BBAJIOO confirma que el rendimiento de una acción no sigue una línea estable. La serie presenta fases de aumento, caídas pronunciadas y periodos de alta volatilidad. El máximo *drawdown* estimado de -68.30% resume el tamaño de la pérdida que habría enfrentado un inversionista que compró antes del máximo correspondiente y vendió en el valle. Por ello, observar solamente el rendimiento promedio habría ocultado una parte importante del riesgo.
+
+Los eventos identificados ayudan a explicar por qué ocurrió esa variación. La pandemia afectó las expectativas de crecimiento y de pago de créditos; el ciclo de alzas de tasas mejoró temporalmente la perspectiva de márgenes; y la incertidumbre política, comercial y de gobierno corporativo modificó la información disponible para los inversionistas. Ninguno de estos elementos depende por completo de las decisiones diarias de BanBajío. El precio incorpora tanto los resultados observados como las expectativas sobre los resultados futuros.
+
+La comparación con el PIB muestra que BBAJIOO puede moverse en el mismo sentido que el ciclo económico, pero la correlación de 0.54 no es suficiente para tratar al PIB como su única explicación. En una institución financiera, la tasa de referencia, el costo de riesgo, la calidad de la cartera y las decisiones corporativas transmiten de manera más directa los cambios del entorno hacia las utilidades esperadas. Esto explica por qué pueden existir años en que la acción y el PIB divergen.
+
+La principal enseñanza del ejercicio es que el riesgo financiero surge de la incertidumbre. Un inversionista no puede controlar una pandemia, una decisión de política monetaria, una reforma, una noticia comercial o el relevo de un directivo. Tampoco puede conocer con certeza la reacción del mercado ante cada novedad. Analizar estos factores no elimina el riesgo, pero permite reconocer sus fuentes, evitar conclusiones basadas en un solo indicador y tomar decisiones con una visión más realista de los posibles resultados.
+
+## Referencias
+
+Banco de México. (2026). *Anuncios de las decisiones de política monetaria, tasa objetivo*. <https://www.banxico.org.mx/publicaciones-y-prensa/anuncios-de-las-decisiones-de-politica-monetaria/anuncios-politica-monetaria-t.html>
+
+Bolsa Mexicana de Valores. (2026a). *Información del trimestre 4 del año 2025: Banco del Bajío, S.A., institución de banca múltiple*. <https://www.bmv.com.mx/docs-pub/infinbnc/bncinfin_1527714_2025-04_2.pdf>
+
+Bolsa Mexicana de Valores. (2026b). *Información del trimestre 1 del año 2026: Banco del Bajío, S.A., institución de banca múltiple*. <https://www.bmv.com.mx/docs-pub/infinbnc/infinbnc_1553208_2026-01_1.pdf>
+
+Bolsa Mexicana de Valores. (2026c, 22 de abril). *Cambios en la dirección general de BanBajío* . <https://www.bmv.com.mx/docs-pub/eventemi/eventemi_1550347_1.pdf>
+
+Bolsa Mexicana de Valores. (2026d). *Información financiera y anual de Banco del Bajío*. <https://www.bmv.com.mx/es/emisoras/informacionfinanciera/BBAJIO-31431-CGEN_CAPIT>
+
+Instituto Nacional de Estadística y Geografía. (2026). *Producto interno bruto trimestral: Indicadores macroeconómicos de coyuntura*. <https://www.inegi.org.mx/app/tabulados/default.aspx?nc=494>
+
+Yahoo Finance. (2026). *Banco del Bajío, S.A. (BBAJIOO.MX): Datos históricos*. <https://finance.yahoo.com/quote/BBAJIOO.MX/history/>

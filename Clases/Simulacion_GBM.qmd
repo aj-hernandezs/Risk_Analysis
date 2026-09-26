@@ -1,0 +1,90 @@
+---
+title: "Simulacion del GBM"
+format: html
+editor: visual
+---
+
+# Preparación de Datos
+
+Intalación de paquetes para la descarga y tratamiento de datos.
+
+## Librerias
+
+```{r, echo=FALSE}
+library(quantmod)
+library(moments)
+library(tseries)
+```
+
+## Descarga de Datos
+
+```{r, echo=FALSE, warning=FALSE}
+ticker <- 'GFNORTEO.MX'
+getSymbols(ticker, scr='yahoo', from='2015-01-01')
+prices <- na.omit(Ad(get(ticker)))
+```
+
+# Transformacion de Datos
+
+## Precios y Rendimientos
+
+```{r}
+lg_price = log(prices)
+srets = dailyReturn(prices, type='arithmetic')
+logrets = dailyReturn(prices, type='log')
+head(cbind(srend, logrend))
+```
+
+## Grafica de Precios
+
+```{r}
+plot(lg_price, main='Log Precio', col='Blue')
+plot(prices, main='Precios', col='Red')
+hist(lg_price, n=100, main='Distribución de Precios Logaritmicos', col='Blue')
+hist(prices, n =100, main='Distribución de Precios', col = 'Red')
+```
+
+## Grafica de Rendimientos
+
+```{r}
+plot(srets, main='Rendimientos', col='purple')
+hist(srets, n=100, main='Distribución de Rendimientos', col='Purple')
+```
+
+## Media y Volatilidad
+
+```{r}
+ER_rets = mean(srets)
+ER_logrets = mean(logrets)
+s_rets = sd(srets)
+s_logrets = sd(logrets)
+```
+
+# Prueba de Hipotesis
+
+## Prueba de Media
+
+La media del rendimiento logaritmico, es casi cero. ¿Podemos decir que es estadisticamente igual a cero?
+
+$$Ho: \mu_r=0$$ $$Hi: \mu_r\neq 0$$
+
+```{r}
+t.test(as.numeric(logrets), mu=0, alternative = "two.sided")
+```
+
+P-Value \> 0.05, por lo que no se rechaza la hipótesis nula, es decir, la media de los rendimientos logaritmicos es estadisticamente igual a cero.
+
+## Prueba de Normalidad
+
+$$Ho: \text{Los rendimientos logaritmicos siguen una distribución normal}$$ $$Hi: \text{Los rendimientos logaritmicos no siguen una distribución normal}$$
+
+```{r}
+jarque.bera.test(logrets)
+```
+
+P-value \< 0.05, por lo que se rechaza la hipótesis nula, es decir, los rendimientos logaritmicos no siguen una distribución normal. Esto dado por el sesgo y curtosis.
+
+```{r}
+kurtosis(logrets)
+skewness(logrets)
+```
